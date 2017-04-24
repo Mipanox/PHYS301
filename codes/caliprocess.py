@@ -129,9 +129,9 @@ class CaliProcess(object):
         
     def colorImage(self):
         """ Generate color image of coadded data """
-        fin_Rdir = datadir+"{0}/coadd/coadd.fits".format("R")
-        fin_Gdir = datadir+"{0}/coadd/coadd.fits".format("G")
-        fin_Bdir = datadir+"{0}/coadd/coadd.fits".format("B")
+        fin_Rdir = self.datadir+"{0}/coadd/coadd.fits".format("R")
+        fin_Gdir = self.datadir+"{0}/coadd/coadd.fits".format("G")
+        fin_Bdir = self.datadir+"{0}/coadd/coadd.fits".format("B")
         
         os.system("/afs/ir.stanford.edu/class/physics100/stiff/bin/stiff {0} {1} {2} \
                    -OUTFILE_NAME {3}_colored.tiff".format(fin_Rdir,fin_Gdir,fin_Bdir,self.basename))
