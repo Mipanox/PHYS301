@@ -12,6 +12,8 @@ sys.path.append("/afs/ir.stanford.edu/class/physics100/workdir/g2/Jason/codes")
 
 import glob
 import chto_coadd
+import coaddition
+import pyfits
 
 def RunCoadd(filterName,datadir,referenceCat=False):
     """

@@ -45,7 +45,7 @@ def AverageBias(biasfiles, k=3.5, method='rej'):
         masterbias = np.nanmedian(biascube,axis=0)
         
     elif method=="med":
-        mastebias = np.median(biascude,axis=0)
+        masterbias = np.nanmedian(biascube,axis=0)
         
     else:
         raise NameError('No such algorithm! Use "rej" or "med"')
@@ -77,7 +77,7 @@ def AverageDark(darkfiles,masterbias):
         
     cleandark2=np.array(darklist) 
     ## median
-    masterdark = np.median(cleandark2,axis=0) 
+    masterdark = np.nanmedian(cleandark2,axis=0) 
     
     return masterdark
 
