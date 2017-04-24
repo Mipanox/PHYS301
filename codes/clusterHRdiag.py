@@ -131,7 +131,13 @@ class clusterHRdiag(object):
         
     
     def fluxArray(self,src_width=1.5,bgd_width=2,low=3e2,high=15e2):
-        """ Flux subtraction and cataloging """
+        """ 
+        Flux subtraction and cataloging 
+        
+        In the plot:
+        The solid and dashed circles correspond to the apetures
+        for sources and background, respectively.
+        """
         
         fluxArray=[]
         for i in range(len(self.catData_mask['X_IMAGE'])):
