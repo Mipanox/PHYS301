@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import photometry as pho
 from matplotlib.colors import LogNorm
+from util import *
 
 plt.rcParams['axes.titlesize'] = 20
 plt.rcParams['axes.labelsize'] = 20
@@ -39,9 +40,9 @@ class clusterHRdiag(object):
         self.imageFits_B = pyfits.open(name.format("B"))[0]
         self.imageFits_G = pyfits.open(name.format("G"))[0]
         
-        self.image = imageFits_G.data
+        self.image = self.imageFits_G.data
         
-    def runSE(self,flagthr=4,**kwargs):
+    def runSE(self,flagthr=4,edge=15,**kwargs):
         """
         Parameters
         - flagthr: integer (float)
@@ -102,8 +103,8 @@ class clusterHRdiag(object):
         """
         self.readfits()
         
-        se.sextractor(name.format("G"), \
-                      "Processed_{0}_G.cat".format(self.basname),\
+        se.sextractor(self.name.format("G"), \
+                      "Processed_{0}_G.cat".format(self.basename),\
                       backphoto_type='LOCAL',
                       detection_type='CCD',
                       checkimage_type='SEGMENTATION',
@@ -111,24 +112,25 @@ class clusterHRdiag(object):
                       **kwargs)
         
         ## catalog
-        cat = pyfits.open(self.workdir+"Processed_{0}_G.cat".format(self.basname))
+        cat = pyfits.open(self.workdir+"Processed_{0}_G.cat".format(self.basename))
         catData = cat[2].data
         
         ## get rid of edges and inappropriate sources
         mask = np.where((catData['FLAGS']<flagthr)&
-                        (catData['X_IMAGE']>15)&(catData['X_IMAGE']<(self.image.shape[0]-15))&
-                        (catData['Y_IMAGE']>15)&(catData['Y_IMAGE']<(self.image.shape[1]-15)))
+                        (catData['X_IMAGE']>edge)&(catData['X_IMAGE']<(self.image.shape[1]-edge))&
+                        (catData['Y_IMAGE']>edge)&(catData['Y_IMAGE']<(self.image.shape[0]-edge)))
         
         self.catData_mask = catData[mask]
         cat[2].data = self.catData_mask
         self.cat = cat
+        self.catData = cat[2].data
         
         ## check that FWHM is reasonable
         self.fwhmMedian = np.median(self.catData_mask['FWHM_IMAGE'])
-        print 'The median of FWHM of the cataloged sources is {0.2f} pixels'.format(fwhmMedian)
+        print 'The median of FWHM of the cataloged sources is {0:.3f} pixels'.format(self.fwhmMedian)
         
     
-    def fluxArray(self,src_width=1.5,bgd_width=2):
+    def fluxArray(self,src_width=1.5,bgd_width=2,low=3e2,high=15e2):
         """ Flux subtraction and cataloging """
         
         fluxArray=[]
@@ -146,11 +148,11 @@ class clusterHRdiag(object):
         
         ## Is there nan, zero, or negative fluxes?
         nanArrray = [[i[0],i[1],i[2]] for i in fluxArray if np.isnan(i[3])]
-        print 'Nan fluxes: [X, Y, FWHM]'.format(nanArrray)
+        print 'Nan fluxes: [X, Y, FWHM]\n {0}'.format(nanArrray)
         zeroArray = np.array([[i[0],i[1],i[2]] for i in fluxArray if i[3]==0])
-        print 'Zero fluxes: [X, Y, FWHM]'.format(zeroArray)
+        print 'Zero fluxes: [X, Y, FWHM]\n {0}'.format(zeroArray)
         negArray = [[i[0],i[1],i[2]] for i in fluxArray if i[3]<0]
-        print 'Negative fluxes: [X, Y, FWHM]'.format(negArray)
+        print 'Negative fluxes: [X, Y, FWHM]\n {0}'.format(negArray)
         
         ## create catalog
         phoCat = pho.createPhotCat([self.imageFits_G,self.imageFits_B], 
@@ -161,12 +163,18 @@ class clusterHRdiag(object):
         self.color = phoCat['mag_B']-phoCat['mag_G']
         self.magni = phoCat['mag_G']
         
-        ## plot
-        plt.figure(figsize=(24,18))
-        plt.scatter(self.color,self.magni,s=10,facecolors='r',edgecolors='k')
-        plt.ylim(-4,-12); plt.xlim(-2,2)
-        plt.xlabel('Color Mmag(B)-Mag(G))')
-        plt.ylabel('Magnitude (Mag(G))')
+        ## examine if the "radii" are well-chosen
+        plt.figure(figsize=(48,48))
+        plt.imshow(self.image, vmin=low, vmax=high, 
+                   origin="lowerleft",norm=LogNorm(), 
+                   cmap="Greys")
+        circles(self.catData_mask['X_IMAGE']-1,
+                self.catData_mask['Y_IMAGE']-1,
+                src_width*self.fwhmMedian,lw=0.5,c='r',fc='none')
+        circles(self.catData_mask['X_IMAGE']-1,
+                self.catData_mask['Y_IMAGE']-1,
+                bgd_width*self.fwhmMedian,lw=0.5,c='r',ls='--',fc='none')
+
         
     def dispCatalog(self,low=3e2,high=15e2):
         """ Display extracted catalog with flags """
@@ -179,16 +187,27 @@ class clusterHRdiag(object):
         plt.scatter(self.catData_mask['X_IMAGE']-1,
                     self.catData_mask['Y_IMAGE']-1,s=240,
                     facecolors='none',edgecolors='r')
-        plt.scatter(285,275,s=500, facecolors='y')
-        for i in range(len(catData['FLAGS'])):
-            plt.annotate(str(catData['FLAGS'][i]),
-                         ((catData['X_IMAGE'][i]-1,catData['Y_IMAGE'][i]-1)),
+        for i in range(len(self.catData['FLAGS'])):
+            plt.annotate(str(self.catData['FLAGS'][i]),
+                         ((self.catData['X_IMAGE'][i]-1,self.catData['Y_IMAGE'][i]-1)),
                          size=50,color='yellow')
         
         plt.subplot(122); plt.title('B')
         plt.imshow(self.imageFits_B.data, vmin=low, vmax=high,
                    origin="lowerleft",norm=LogNorm(),
                    cmap="Greys")
-        plt.scatter(catData_mask['X_IMAGE']-1,
-                    catData_mask['Y_IMAGE']-1,s=240, 
+        plt.scatter(self.catData_mask['X_IMAGE']-1,
+                    self.catData_mask['Y_IMAGE']-1,s=240, 
                     facecolors='none', edgecolors='r')
+        for i in range(len(self.catData['FLAGS'])):
+            plt.annotate(str(self.catData['FLAGS'][i]),
+                         ((self.catData['X_IMAGE'][i]-1,self.catData['Y_IMAGE'][i]-1)),
+                         size=50,color='yellow')
+            
+    def dispHR(self):
+        """ Plot the HR diagram """
+        plt.figure(figsize=(24,18))
+        plt.scatter(self.color,self.magni,s=10,facecolors='r',edgecolors='k')
+        plt.ylim(-4,-12); plt.xlim(-2,2)
+        plt.xlabel('Color Mmag(B)-Mag(G))')
+        plt.ylabel('Magnitude (Mag(G))')
