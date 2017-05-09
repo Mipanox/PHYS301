@@ -52,6 +52,21 @@ def AverageBias(biasfiles, k=3.5, method='rej'):
 
     return masterbias
 
+def RN2_bias(biasfiles):
+    """
+    Readout noises determined by variance in the bias frames.
+    Largely follows `AverageBias` above
+    """
+    
+    biasdata =  [pyfits.open(i)[0].data for i in biasfiles] 
+    biascube = np.array(biasdata)
+    
+    ## median of each image
+    Medimage=np.nanmedian(biascube,axis=0)
+
+    ## total variance
+    return (np.std(Medimage)**2), Medimage
+
 def AverageDark(darkfiles,masterbias):
     """
     AverageDark produces a master dark frame image from a list of individual
