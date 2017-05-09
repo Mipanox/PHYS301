@@ -64,8 +64,8 @@ def RN2_bias(biasfiles):
     ## median of each image
     Medimage=np.nanmedian(biascube,axis=0)
 
-    ## total variance
-    return (np.std(Medimage)**2), Medimage
+    ## total variance, convert back to var of pixels
+    return (np.std(Medimage)**2)*len(biasfiles), Medimage
 
 def AverageDark(darkfiles,masterbias):
     """
