@@ -3,9 +3,9 @@ Photometry stuff.
 Compute fluxes for sources/background defined by aperture
 and creates source catalog.
 
-No error propagation yet.
+Including error and probability of background being a constant
 
-(Last modified: 04/23/17)
+(Last modified: 05/08/17)
 """
 
 ###############################################
@@ -47,7 +47,8 @@ def backgroundEstimator(image):
     return modeold
 
 def aperFlux(image, x, y, source_radius = 10, background_width = 10, 
-             gain = 3.0, nimages = 1, errflag=False):
+             gain = 3.0, nimages = 1, errflag=False,
+             RN2 = 1., DarkMed = 1., expTime = 1.):
     """ 
     Measures the flux (in adc counts), gaussian flux
     uncertainty, and the probability that the background is
@@ -67,12 +68,22 @@ def aperFlux(image, x, y, source_radius = 10, background_width = 10,
       Width of an annulus, with
       source_radius < R <= source_radius + background_width,
       representing the background region
-    - gain: The gain of the detector
+    - gain: The gain of the detector. 
+      For 24 inch: 6
+      For 16 inch: 1.5 (estimated by TAs)
     - nimages: 
       The number of images that were coadded to form this image
-    - errflaf: 
+      
+    - errflag: 
       This bool determines whether or not errors
       should be determined for the flux. Used later.
+    - RN2:
+      readout noise squared determined by variance of bias images
+    - DarkMed:
+      Median of dark frame. Multiplied by gain equals variance in counts
+      due to Poissonality.
+    - expTime:
+      Total exposure time
     """
     
     ysize, xsize = image.shape
@@ -95,21 +106,36 @@ def aperFlux(image, x, y, source_radius = 10, background_width = 10,
     B_bar = backgroundEstimator(image[inBackground])
 
     ## correct for background
-    flux = (A - nsourcepix*B_bar)
+    flux = (A - nsourcepix*B_bar )/ expTime * gain
     
     ## error handling
+    #-- initial
     fluxerr=0.
     background_prob=0.
                    
-    #if (errFlag):
-        #fluxerr=?
-        #background_prob=?
+    if (errflag):
+        fluxErrSq = A*gain
+        skyErrSq  = B_bar*gain*nsourcepix
+        darkErrSq = DarkMed*gain*expTime*nsourcepix
+        RNErrSq   = RN2*gain*nsourcepix
+        CountErr  = np.sqrt(fluxErrSq+skyErrSq+darkErrSq+RNErrSq)
+        fluxerr   = (CountErr/expTime)/np.sqrt(nimages)
+        
+        ## background probability- assume every background pixel follows Poisson
+        #  add up the chi square
+        #  (where 1.25 represents the diff. betweem the error for median and for mean)
+        b_std = np.sqrt(gain*image[inBackground].flatten()+DarkMed*gain*expTime+RN2*gain)/np.sqrt(nimages)*1.25
+        b_res = (image[inBackground].flatten() - B_bar)*gain
+        chi2 = np.sum((b_res/b_std)**2)
+        
+        ## probability of background being constant ( = B-bar)
+        background_prob = sp.stats.chi2.sf(chi2, nbackgroundpix-1)
 
     return flux, fluxerr, background_prob
 
 #############################################
 
-def aperMag(flux, fluxerr, errflag=False):
+def aperMag(flux, fluxerr):
     """
     Converts a measured flux and fluxerr into a magnitude
     and magnitude error. Assumes gaussian error propagation.
@@ -127,15 +153,15 @@ def aperMag(flux, fluxerr, errflag=False):
     """
     
     ## flux to magnitude
-    mag = -2.5*np.log10(flux)
-    magerr = 0.0
+    mag    = -2.5*np.log10(flux)
+    magerr = 2.5/(np.log(10)*flux)*fluxerr
 
     return mag, magerr
     
     
 ###############################################
 
-def createPhotCat(imageArray, detectcat, filters, **otherparams):
+def createPhotCat(imageArray, detectcat, filters, refStarInf, RN2DarkMedInf,**otherparams):
     """
     Given an image and a detection catalog, this
     function will calculate the flux at every x,y position in the
@@ -166,48 +192,86 @@ def createPhotCat(imageArray, detectcat, filters, **otherparams):
     newColumnsArray = []
     
     ## iterate through each filter
-    for index, image in enumerate(imageArray):
-        nimages = image.header['NCOMBINE']
+    for index, images in enumerate(imageArray):
+        refIdx, refTrue = refStarInf[index] 
+        RN2DarkMeds = RN2DarkMedInf[index]
+        
+        ## loop through images, for reference star
+        ReferenceFlux=[]
+        ReferenceFluxErr=[]
+        for i, image in enumerate(images):
+            nimages = image.header['NCOMBINE']
+            expTime = image.header['EXPTIME']
+            
+            ## define some arrays to hold our calculations
+            x = detectcat['X_IMAGE'][refIdx]
+            y = detectcat['Y_IMAGE'][refIdx]
+            
+            RN2, DarkMed = RN2DarkMeds[i]
+            flux, fluxerr, background_prob = aperFlux(image.data,x,y,
+                                                      nimages=nimages,
+                                                      expTime=expTime,
+                                                      RN2=RN2,
+                                                      DarkMed=DarkMed,**otherparams)
+            ReferenceFlux.append(flux)
+            ReferenceFluxErr.append(fluxerr)
+         
+        ## loop through images, for targets
+        rawFlux=[]
+        rawFluxErr=[]
+        for iRN, image in enumerate(images):
+            nimages = image.header['NCOMBINE']
+            expTime = image.header['EXPTIME']
+            
+            fluxs     = np.zeros(len(detectcat['X_IMAGE']))
+            fluxerrs  = np.zeros(len(detectcat['X_IMAGE']))
+            backprobs = np.zeros(len(detectcat['X_IMAGE']))
+            
+            RN2, DarkMed = RN2DarkMeds[iRN]
+            ## over objects
+            for i, x,y in zip(np.arange(len(detectcat['X_IMAGE'])),
+                              detectcat['X_IMAGE'], 
+                              detectcat['Y_IMAGE']):
 
-        ## variables
-        fluxs = np.zeros(len(detectcat['X_IMAGE']))
-        fluxerrs = np.zeros(len(detectcat['X_IMAGE']))
-        backprobs = np.zeros(len(detectcat['X_IMAGE']))
-        mags = np.zeros(len(detectcat['X_IMAGE']))
-        magerrs = np.zeros(len(detectcat['X_IMAGE']))
+                ## calculate the flux
+                fluxs[i], fluxerrs[i], backprobs[i] = aperFlux(image.data,x,y,
+                                                               nimages=nimages,
+                                                               expTime=expTime, 
+                                                               RN2=RN2, 
+                                                               DarkMed=DarkMed,**otherparams)
 
-        ## loop over the objects
-        for i, x,y in zip(np.arange(len(detectcat['X_IMAGE'])),
-                          detectcat['X_IMAGE'], 
-                          detectcat['Y_IMAGE']):
-
-            ## flux
-            fluxs[i], fluxerrs[i], backprobs[i] = \
-                     aperFlux(image.data, x,y,nimages = nimages, **otherparams)
-            ## magnitude
-            mags[i], magerrs[i] = aperMag(fluxs[i], fluxerrs[i])
-
+            rawFlux.append(fluxs)
+            rawFluxErr.append(fluxerrs)
+            
+        ReferenceFlux    = np.array(ReferenceFlux)
+        ReferenceFluxErr = np.array(ReferenceFluxErr)
+        rawFlux    = np.array(rawFlux)
+        rawFluxErr = np.array(rawFluxErr)
+        
+        refmag, refmagerr = aperMag(ReferenceFlux, ReferenceFluxErr)
+        rawmag, rawmagerr = aperMag(rawFlux, rawFluxErr)
+        truemag    = rawmag-refmag[:,np.newaxis]+refTrue
+        #-- error propagations
+        truemagerr = np.sqrt(rawmagerr**2+refmagerr[:,np.newaxis]**2)
+        
+        weightedTrueMag    = np.average(truemag, weights=1/truemagerr**2., axis=0)
+        weightedTrueMagErr = np.sqrt(1/np.sum(1/truemagerr**2., axis=0))
+        
         ## create columns for a new catalog
         newcols=[]
-        newcols.extend([pyfits.Column(name = 'flux_'+filters[index],
-                                  format = 'E', array = fluxs),
-                        pyfits.Column(name = 'fluxerr_'+filters[index],
-                                  format = 'E', array = fluxerrs),
-                        pyfits.Column(name = 'backprob_'+filters[index],
-                                  format = 'E', array = backprobs),
-                        pyfits.Column(name = 'mag_'+filters[index],
-                                  format = 'E', array = mags),
-                        pyfits.Column(name = 'magerr_'+filters[index],
-                                  format = 'E', array = magerrs)])
-        
+        newcols.extend([pyfits.Column(name = 'truemag_'+filters[index],
+                                  format = 'E', array = weightedTrueMag),
+                        pyfits.Column(name = 'truemagerr_'+filters[index],
+                                  format = 'E', array = weightedTrueMagErr)])
         newColumnsArray.append(newcols) 
-    
-    ## convert the columns into an LDAC catalog, copying the existing
-    ## columns from the detection cat
+        
+    ## convert the columns into an LDAC catalog, 
+    #  copying the existing columns from the detection cat
     totalColumns=HDU.columns
     
     for column in newColumnsArray:
         totalColumns+=pyfits.ColDefs(column)
         
     photcat = ldac.LDACCat(pyfits.new_table(totalColumns,header=HDU.header))
-    return photcat
+    
+    return photcat    
