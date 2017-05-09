@@ -114,6 +114,9 @@ def aperFlux(image, x, y, source_radius = 10, background_width = 10,
     background_prob=0.
                    
     if (errflag):
+        ## Poisson. Total noise squared = F_obj*t + F_sky(per pix)*t*n +
+        #                                 D*gain*t*n + RN2*n
+        #  where F_obj and F_sky are given by the fluxes time gain
         fluxErrSq = A*gain
         skyErrSq  = B_bar*gain*nsourcepix
         darkErrSq = DarkMed*gain*expTime*nsourcepix
