@@ -132,7 +132,9 @@ def flux_of_ref_star(catData_mask,workdir,cadddir,batches,
         RN2, DarkMed = np.load(name[:-5]+"_RN2_DarkMed.npy")
         expTime = imageFits_G.header['EXPTIME']
         
-        flux, fluxerr, background_prob = pho.aperFlux(image, catData_mask['X_IMAGE'][599], catData_mask['Y_IMAGE'][599],
+        flux, fluxerr, background_prob = pho.aperFlux(image, 
+                                                      catData_mask['X_IMAGE'][ref_idx], 
+                                                      catData_mask['Y_IMAGE'][ref_idx],
                                                       source_radius = 1.3*fwhmMedian, 
                                                       background_width= max_r*fwhmMedian,
                                                       gain = gain, 
@@ -223,10 +225,13 @@ def HR_diagram(target,dist=None,dist_ref=None):
     mag = phoCat['truemag_G']
     
     ## absolute magnitude?
-    if dist is not None:
+    if dist is not None and dist_ref is not None:
         #-- correct back the difference in distance
         #   for target and reference star
         mag -= 5*(np.log10(dist)-np.log10(dist_ref))
+        
+    elif dist is not None:
+        mag -= 5*(np.log10(dist)-1)
         
     plt.figure(figsize=(10,10))
     plt.errorbar(newhdu[1].data['colorB_G'], mag, 
@@ -235,3 +240,4 @@ def HR_diagram(target,dist=None,dist_ref=None):
     #plt.ylim(14,8)
     plt.xlabel('mag(B)-mag(G)'); plt.ylabel('mag(G)')
     plt.title(target)
+    plt.gca().invert_yaxis()
