@@ -13,6 +13,8 @@ Including error and probability of background being a constant
 import numpy as np
 import fitmodel
 import pyfits, ldac
+import scipy as sp
+import numpy as np
 
 ################################################
 def backgroundEstimator(image):
@@ -253,7 +255,9 @@ def createPhotCat(imageArray, detectcat, filters, refStarInf, RN2DarkMedInf,**ot
         
         refmag, refmagerr = aperMag(ReferenceFlux, ReferenceFluxErr)
         rawmag, rawmagerr = aperMag(rawFlux, rawFluxErr)
-        truemag    = rawmag-refmag[:,np.newaxis]+refTrue
+        
+        ## differential photometry
+        truemag    = rawmag - refmag[:,np.newaxis] + refTrue
         #-- error propagations
         truemagerr = np.sqrt(rawmagerr**2+refmagerr[:,np.newaxis]**2)
         
@@ -270,10 +274,10 @@ def createPhotCat(imageArray, detectcat, filters, refStarInf, RN2DarkMedInf,**ot
         
     ## convert the columns into an LDAC catalog, 
     #  copying the existing columns from the detection cat
-    totalColumns=HDU.columns
+    totalColumns = HDU.columns
     
     for column in newColumnsArray:
-        totalColumns+=pyfits.ColDefs(column)
+        totalColumns += pyfits.ColDefs(column)
         
     photcat = ldac.LDACCat(pyfits.new_table(totalColumns,header=HDU.header))
     
