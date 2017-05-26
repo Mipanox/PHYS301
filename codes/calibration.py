@@ -5,7 +5,7 @@ Functions for calibrating CCD images:
 - Flat field : mild selective rejection mainly to remove 
                residual hot pixels (default to 1.5 sigma clip)
 
-(Last modified: 04/23/17)
+(Last modified: 05/26/17)
 """
 
 import pyfits
@@ -137,7 +137,8 @@ def AverageFlat(flatfiles,masterbias,masterdark,k=1.5):
     
     return masterflat
 
-def ScienceExposure(rawscidata,masterbias,masterdark,masterflat):
+def ScienceExposure(rawscidata,masterbias,masterdark,masterflat,
+                    nodark=False,noflat=False):
     """
     Do the calibration based on the master bias, dark frame,
     and flat images.
@@ -145,11 +146,16 @@ def ScienceExposure(rawscidata,masterbias,masterdark,masterflat):
     rawimage = rawscidata.data
     expotime = rawscidata.header['exposure']
     
-    scienceimage = (rawimage-expotime*masterdark-masterbias)/masterflat
-    
+    if nodark==False and noflat==False:
+        scienceimage = (rawimage-expotime*masterdark-masterbias)/masterflat
+    elif nodark==True and noflat==True:
+        scienceimage = (rawimage-masterbias)
+    elif nodark==True and noflat==False: 
+        scienceimage = (rawimage-masterbias)/masterflat
     return scienceimage
 
-def batchScienceExposure(imageList, masterbias,masterdark,masterflat, outDir=None):
+def batchScienceExposure(imageList,masterbias,masterdark,masterflat,
+                         outDir=None,**kwargs):
     """
     This function helps you to reduce a bunch of images. 
     
@@ -170,7 +176,7 @@ def batchScienceExposure(imageList, masterbias,masterdark,masterflat, outDir=Non
     outList=[]
     for imageName in imageList:
         rawData = pyfits.open(imageName)[0]
-        newData = ScienceExposure(rawData,masterbias,masterdark,masterflat)
+        newData = ScienceExposure(rawData,masterbias,masterdark,masterflat,**kwargs)
         if outDir is not None:
             name = imageName.split("/")[-1]
             sciencehdu = pyfits.PrimaryHDU(newData,header=rawData.header)
