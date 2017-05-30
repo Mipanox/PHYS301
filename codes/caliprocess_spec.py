@@ -7,8 +7,6 @@ Calibration for spectral data
 import sys
 sys.path.append("/afs/ir.stanford.edu/class/physics100/workdir/g2/Jason/codes/")
 
-import coaddition
-import chto_coadd
 import pyfits
 import numpy as np
 import matplotlib.pyplot as plt
@@ -43,6 +41,11 @@ class CaliProcess(object):
           - darkidx
           - flatidx
         """
+        ## initialize, in case of empty entries
+        self.biasfiles, \
+        self.darkfiles, \
+        self.flatfiles  = [],[],[]
+        
         ## lists of calibration files
         biaslist = [f for f in glob.glob(self.datadir+'/*') if 'bias' in f or 'Bias' in f]
         darklist = [f for f in glob.glob(self.datadir+'/*') if 'dark' in f or 'Dark' in f]
@@ -61,7 +64,7 @@ class CaliProcess(object):
             self.darkfiles = darklist
             self.flatfiles = flatlist
             
-    def makeCali(self,method):
+    def makeCali(self,method,**kwargs):
         """
         Make calibration master images
         
@@ -74,9 +77,9 @@ class CaliProcess(object):
         print "If not, call `dispCali`               \n"
         
         ## 
-        self.finalbias = cp.AverageBias(self.biasfiles,method=method) 
-        self.finaldark = cp.AverageDark(self.darkfiles,self.finalbias) 
-        self.finalflat = cp.AverageFlat(self.flatfiles,self.finalbias,self.finaldark) 
+        self.finalbias = cp.AverageBias(self.biasfiles,method=method,**kwargs) 
+        self.finaldark = cp.AverageDark(self.darkfiles,self.finalbias,**kwargs) 
+        self.finalflat = cp.AverageFlat(self.flatfiles,self.finalbias,self.finaldark,**kwargs) 
         
         ## write fits files
         newbias = self.procdir+'MasterBias.fits'
@@ -97,7 +100,7 @@ class CaliProcess(object):
         Run calibration
         
         Options
-        - Can only calibrate for bias, or bias+dark, or bias+flat.
+        - Can calibrate only for bias, or bias+dark, or bias+flat.
           Use 'nodark' or 'noflat' accordingly
         - specflat: boolean
           If specified, use this SpecMasterFlat.fits to calibrate

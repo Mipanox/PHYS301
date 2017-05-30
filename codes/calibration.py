@@ -13,7 +13,7 @@ import numpy as np
 import sys,os
 
 
-def AverageBias(biasfiles, k=3.5, method='rej'):
+def AverageBias(biasfiles, k=3.5, method='rej',data=None):
     """
     AverageBias produces a master bias image from a list of individual
     bias exposures.
@@ -30,7 +30,17 @@ def AverageBias(biasfiles, k=3.5, method='rej'):
     - method: string
       'rej' or 'med'. Choice for algorithm.
       Some observations may be better calibrated by one or the other.
+      
+    Others
+    - data: some fits file from the same observations
+      Used when no biasfile is provided. Generate an empty array
+      with appropriate size
     """
+    ## if empty, do nothing
+    if len(biasfiles)==0:
+        print 'CAUTION: No bias provided. Return empty array'
+        return np.zeros(pyfits.open(data)[0].data.shape)
+    
     # opens each bias image file and stores the 2d images in a list
     biasdata = [pyfits.open(i)[0].data for i in biasfiles] 
     biascube = np.array(biasdata)
@@ -67,7 +77,7 @@ def RN2_bias(biasfiles):
     ## total variance, convert back to var of pixels
     return (np.std(Medimage)**2)*len(biasfiles), Medimage
 
-def AverageDark(darkfiles,masterbias):
+def AverageDark(darkfiles,masterbias,data=None):
     """
     AverageDark produces a master dark frame image from a list of individual
     dark frame exposures.
@@ -78,6 +88,12 @@ def AverageDark(darkfiles,masterbias):
     - darkfiles: list of strings
     - masterbias: the master bias image
     """
+    ## if empty, do nothing
+    if len(darkfiles)==0:
+        print 'CAUTION: No bias provided'
+        print '         Assume no bias either. Return empty array'
+        return np.zeros(pyfits.open(data)[0].data.shape)
+    
     darkdata = [pyfits.open(i)[0].data for i in darkfiles]
     darkexpo = [pyfits.open(i)[0].header['exposure'] for i in darkfiles]
 
@@ -97,7 +113,7 @@ def AverageDark(darkfiles,masterbias):
     return masterdark
 
 
-def AverageFlat(flatfiles,masterbias,masterdark,k=1.5):
+def AverageFlat(flatfiles,masterbias,masterdark,k=1.5,data=None):
     """
     AverageFlat produces a master flat field image from a list of individual
     flat field exposures.
@@ -114,6 +130,11 @@ def AverageFlat(flatfiles,masterbias,masterdark,k=1.5):
       The level of sigma clipping to remove any residual 'hot pixels'
       Defaults to 1.5
     """
+    ## if empty, do nothing
+    if len(flatfiles)==0:
+        print 'CAUTION: No bias provided'
+        print '         Assume no bias nor dark. Return empty array'
+        return np.zeros(pyfits.open(data)[0].data.shape)
     
     flatdata = [pyfits.open(i)[0].data for i in flatfiles]
     flatexpo = [pyfits.open(i)[0].header['exposure'] for i in flatfiles]
