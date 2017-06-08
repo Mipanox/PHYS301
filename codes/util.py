@@ -70,3 +70,106 @@ def circles(x, y, s, c='b', vmin=None, vmax=None, **kwargs):
     if c is not None:
         plt.sci(collection)
     return collection
+
+
+def peakdet(v, delta):
+    """
+    Peak detection by 'difference' criterion 'delta'
+     Reference: https://gist.github.com/endolith/250860
+    """
+    import numpy as np
+    
+    maxtab,mintab = [],[]
+    x = np.arange(len(v))
+    v = np.copy(v)
+    
+    mn, mx = np.inf, -np.inf
+    mnpos, mxpos = np.nan, np.nan
+    
+    lookformax = True
+    
+    for i in np.arange(len(v)):
+        this = v[i]
+        if this > mx:
+            mx = this
+            mxpos = x[i]
+        if this < mn:
+            mn = this
+            mnpos = x[i]
+        
+        if lookformax:
+            if this < mx-delta:
+                maxtab.append((mxpos, mx))
+                mn = this
+                mnpos = x[i]
+                lookformax = False
+        else:
+            if this > mn+delta:
+                mintab.append((mnpos, mn))
+                mx = this
+                mxpos = x[i]
+                lookformax = True
+
+    return np.array(maxtab)
+
+def second_largest(numbers):
+    """
+    Find the second largest element and its index
+    """
+    count = 0
+    m1 = m2 = float('-inf')
+    for i in range(len(numbers)):
+        x = numbers[i]
+        count += 1
+        if x > m2:
+            if x >= m1:
+                idx = i
+                m1, m2 = x, m1  
+            else:
+                m2 = x
+                idx = i
+    return m2,idx if count >= 2 else None
+
+def conv_gaus(spec_list,fwhm,norm=True,
+              show_norm=False,**kwargs):
+    """
+    Convolving 1d Gaussian to the spectra
+    
+    Inputs:
+    - spec_list: list of numpy.1darray
+      List of spectra. Presumably each entry is 
+      the spectrum along each column
+      
+    Parameters:
+    - fwhm: float
+      The FWHM of the Gaussian kernel
+      Note that it is related to sigma via
+       FWHM = 2 * np.sqrt(2*np.log(2)) * sigma
+       
+    Options
+    - norm: boolean
+      If True, the convolved result will be 
+      normalized by Unif (conv) Gaussian
+      to handle boundary effect. Default True
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    
+    arr = np.copy(spec_list[0])    
+    xx = np.arange(-arr.shape[0]/2.,arr.shape[0]/2.)
+    
+    ##
+    sigma = fwhm / (2*np.sqrt(2*np.log(2)))
+    gauss = np.exp(-(xx/sigma)**2/2)
+    
+    ## normalization factor
+    norm = np.convolve(np.ones(arr.shape[0]),gauss,mode="same",**kwargs)
+    if show_norm==True:
+        plt.plot(norm); plt.title('Normalization correction'); plt.show()
+    
+    ## convolution 
+    spec_conv = []
+    for i in range(len(spec_list)):
+        spec_conv.append(np.convolve(spec_list[i],gauss,mode="same") / norm)
+    
+    return spec_conv
